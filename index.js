@@ -15,11 +15,20 @@ copyDiffFiles(lastRunResult, function (runResult, newFiles, copiedSize) {
     if (true === args.backupLastRunFile && fs.existsSync(args.lastRunResultFile)) {
         fs.copyFileSync(args.lastRunResultFile, `./lastRun.${getDateString(new Date(fs.statSync(args.lastRunResultFile).mtimeMs))}.json`)
     }
+    if (args.backupsToKeep > 0) {
+        removeOldBackups(path.dirname(args.lastRunResultFile), args.backupsToKeep)
+    }
     saveLastRunResult(args.lastRunResultFile, runResult);
 });
 
 
 //------------------------------------------functii--------------------------------------
+
+function removeOldBackups(dir, backupsToKeep) {
+    fs.readdirSync(dir, {}).filter(f => /lastRun\.([a-z0-9_\-])+\.json/.test(f)).sort().reverse().slice(backupsToKeep).forEach(f => {
+        fs.unlinkSync(path.join(dir, f));
+    });
+}
 
 function getDateString(d) {
     return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2) + "_" +
@@ -183,6 +192,15 @@ function getArgsDesc() {
             example: 'c:\\some\\lastRun.json',
             description: 'fisierul care stocheaza rezultatul ultimei rulari; daca nu exista atunci se creeaza',
         },
+        backupsToKeep: {
+            alias: '--backups-to-keep',
+            required: false,
+            defaultValue: '5',
+            validate: isNumeric,
+            sanitization: parseInt,
+            example: '10',
+            description: 'cate backup-uri sa tinem; se sterg celelalte backup-uri in mod automat',
+        },
         backupLastRunFile: {
             alias: '--backup-last-run-file',
             required: false,
@@ -255,6 +273,10 @@ function parseArgs() {
 
 function isString(v) {
     return v !== undefined && typeof v === 'string'
+}
+
+function isNumeric(v) {
+    return isString(v) && /^\d+$/.test(v);
 }
 
 function isBoolean(v) {
