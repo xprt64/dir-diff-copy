@@ -104,3 +104,4 @@ dist
 .tern-port
 .idea/
 lastRun.json
+lastRun*.json

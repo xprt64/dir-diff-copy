@@ -5,18 +5,27 @@ var fs = require('fs');
 const args = getArgs();
 
 const lastRunResult = fetchLastRunResult(args.lastRunResultFile);
-console.log('lastRunResult', lastRunResult);
+//console.log('lastRunResult', lastRunResult);
 
-copyDiffFiles(lastRunResult,  function(runResult, newFiles, copiedSize){
-    console.log('new files', newFiles);
-    console.log('copied size', copiedSize);
+copyDiffFiles(lastRunResult, function (runResult, newFiles, copiedSize) {
+    console.log('new files count', newFiles.length);
+    console.log('new files size', copiedSize);
     //console.log('runResult', runResult);
 
-    saveLastRunResult(args.lastRunResultFile, runResult)
+    if (true === args.backupLastRunFile && fs.existsSync(args.lastRunResultFile)) {
+        fs.copyFileSync(args.lastRunResultFile, `./lastRun.${getDateString(new Date(fs.statSync(args.lastRunResultFile).mtimeMs))}.json`)
+    }
+    saveLastRunResult(args.lastRunResultFile, runResult);
 });
 
 
 //------------------------------------------functii--------------------------------------
+
+function getDateString(d) {
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2) + "_" +
+        ("0" + d.getHours()).slice(-2) + "-" + ("0" + d.getMinutes()).slice(-2) + "-" + ("0" + d.getSeconds()).slice(-2);
+
+}
 
 function makeDiffFilePath(file) {
     return args.diffDir + file.slice(args.sourceDir.length);
@@ -29,12 +38,13 @@ function saveLastRunResult(path, runResult) {
 function ensureDirForFile(newFile) {
     const dir = path.dirname(newFile);
     if (!fs.existsSync(dir)) {
-        if(!fs.mkdirSync(dir, {recursive: true})){
+        if (!fs.mkdirSync(dir, {recursive: true})) {
             throw `mkdir failed: ${dir}`;
         }
     }
 }
-function copyDiffFiles(lastRunResult, done){
+
+function copyDiffFiles(lastRunResult, done) {
 
     walk(args.sourceDir, function (err, results) {
         if (err) throw err;
@@ -55,7 +65,7 @@ function copyDiffFiles(lastRunResult, done){
                         mtimeMs: stat.mtimeMs,
                     }
                 };
-                copiedSize+=stat.size;
+                copiedSize += stat.size;
             }
         });
 
@@ -63,9 +73,9 @@ function copyDiffFiles(lastRunResult, done){
     });
 }
 
-function isFileNew(file, last){
+function isFileNew(file, last) {
     const stat = fs.statSync(file);
-    if(stat.size !== last.stat.size || stat.mtimeMs !== last.stat.mtimeMs){
+    if (stat.size !== last.stat.size || stat.mtimeMs !== last.stat.mtimeMs) {
         return true;
     }
     return false;
@@ -107,14 +117,14 @@ function usage() {
     let argsDesc = getArgsDesc();
     const str = Object.getOwnPropertyNames(argsDesc).map(name => {
         const desc = argsDesc[name];
-        let str  = `${desc.alias}: `;
-        if(desc.description){
+        let str = `${desc.alias}: `;
+        if (desc.description) {
             str += `${desc.description}`;
         }
-        if(desc.required){
+        if (desc.required) {
             str += `, obligatoriu`;
         }
-        if(desc.defaultValue){
+        if (desc.defaultValue) {
             str += `, valoare implicita ${desc.defaultValue}`;
         }
         return str;
@@ -122,7 +132,7 @@ function usage() {
 
     const exemplu = Object.getOwnPropertyNames(argsDesc).map(name => {
         const desc = argsDesc[name];
-        let str  = `${desc.alias}=${desc.example}`;
+        let str = `${desc.alias}=${desc.example}`;
         // if(!desc.required){
         //     str = `[${str}]`;
         // }
@@ -173,6 +183,15 @@ function getArgsDesc() {
             example: 'c:\\some\\lastRun.json',
             description: 'fisierul care stocheaza rezultatul ultimei rulari; daca nu exista atunci se creeaza',
         },
+        backupLastRunFile: {
+            alias: '--backup-last-run-file',
+            required: false,
+            defaultValue: '',
+            validate: isBoolean,
+            example: 'true',
+            sanitization: s => s === 'true',
+            description: 'daca este true, fisierul care stocheaza rezultatul rulari anterioare va fi salvat intr-un fisier aditional, de forma lastRun.YYY-mm-DD_HH-MM-SS.json',
+        },
         help: {
             alias: '--help',
             required: false,
@@ -187,6 +206,7 @@ function parseArgs() {
     const args = {
         sourceDir: undefined,
         diffDir: undefined,
+        backupLastRunFile: false,
     }
 
     const argsDesc = getArgsDesc();
@@ -203,14 +223,17 @@ function parseArgs() {
     }
 
     argsRaw.forEach(arg => {
-        const [name, value] = arg.split('=', 2);
-        if(name === '--help'){
+        let [name, value] = arg.split('=', 2);
+        if (name === '--help') {
             usage();
             process.exit(0);
         }
         const [argName, argDesc] = findArgDescByAlias(name);
         if (!argDesc.validate(value)) {
             throw  `parametrul ${name} nu are valoare valida: ${value}`
+        }
+        if ('sanitization' in argDesc) {
+            value = argDesc.sanitization(value)
         }
         args[argName] = value;
     });
@@ -232,4 +255,8 @@ function parseArgs() {
 
 function isString(v) {
     return v !== undefined && typeof v === 'string'
+}
+
+function isBoolean(v) {
+    return isString(v) && (v === 'true' || v === 'false');
 }
